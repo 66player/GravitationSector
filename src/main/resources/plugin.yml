@@ -2,4 +2,5 @@ name: GravitationSector
 version: '${project.version}'
 main: zero.nyc.gravitationsector.GravitationSector
 api-version: '1.18'
+depend: [WorldGuard]
 authors: [ 0nyc ]
