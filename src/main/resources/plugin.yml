@@ -1,0 +1,5 @@
+name: GravitationSector
+version: '${project.version}'
+main: zero.nyc.gravitationsector.GravitationSector
+api-version: '1.18'
+authors: [ 0nyc ]
