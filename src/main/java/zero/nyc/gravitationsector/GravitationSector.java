@@ -27,17 +27,17 @@ public final class GravitationSector extends JavaPlugin implements Listener {
         return (WorldGuardPlugin) pl;
     }
 
-//    public boolean PlayerInRegion(Player player) {
-//        ProtectedRegion region = worldGuard().
-//        int x = player.getLocation().getBlockX();
-//        int y = player.getLocation().getBlockY();
-//        int z = player.getLocation().getBlockZ();
-//
-//        if (region.contains(x, y, z)) {
-//            return true;
-//        } else {
-//            return false;
-//        }
-//    }
+    public boolean PlayerInRegion(Player player) {
+        ProtectedRegion region = worldGuard().
+        int x = player.getLocation().getBlockX();
+        int y = player.getLocation().getBlockY();
+        int z = player.getLocation().getBlockZ();
+
+        if (region.contains(x, y, z)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 
 }
