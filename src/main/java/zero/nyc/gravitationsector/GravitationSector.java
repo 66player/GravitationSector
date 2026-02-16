@@ -5,6 +5,7 @@ import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.protection.managers.RegionManager;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import com.sk89q.worldguard.protection.regions.RegionContainer;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -14,18 +15,49 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public final class GravitationSector extends JavaPlugin implements Listener {
+
+    private static GravitationSector instance;
 
     public RegionContainer container;
 
     @Override
     public void onEnable() {
+        instance = this;
         getCommand("spacehelmet").setExecutor(new SpaceHelmet());
         getServer().getPluginManager().registerEvents(this, this);
         container = WorldGuard.getInstance().getPlatform().getRegionContainer();
+    }
+
+    public static GravitationSector getInstance() {
+        return instance;
+    }
+
+    public Set<UUID> getPlayersInSpace() {
+        Set<UUID> uuidSet = new HashSet<>();
+        for (String uuidString : playersInSpace) {
+            uuidSet.add(UUID.fromString(uuidString));
+        }
+        return uuidSet;
+    }
+
+    public Set<UUID> getPlayersInSafeZone() {
+        Set<UUID> uuidSet = new HashSet<>();
+        for (String uuidString : playersInSafeZone) {
+            uuidSet.add(UUID.fromString(uuidString));
+        }
+        return uuidSet;
+    }
+
+    public boolean isInSpace(Player player) {
+        return playersInSpace.contains(player.getUniqueId().toString());
+    }
+
+    public boolean isInSafeZone(Player player) {
+        return playersInSafeZone.contains(player.getUniqueId().toString());
     }
 
     @Override
