@@ -1,5 +1,6 @@
 package zero.nyc.gravitationsector;
 
+import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.command.Command;
@@ -30,9 +31,11 @@ public class SpaceHelmet implements CommandExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String s, String[] label) {
-        if (sender instanceof Player p && sender.isOp()) {
-            p.getInventory().addItem(createHelmet());
-        }
+        if (sender instanceof Player p) {
+            if (p.isOp()) {
+                p.getInventory().addItem(createHelmet());
+            } else p.sendMessage(Color.RED + "Only admin can use that !");
+        } else sender.sendMessage(Color.RED + "Only player can use that !");
         return false;
     }
 }
