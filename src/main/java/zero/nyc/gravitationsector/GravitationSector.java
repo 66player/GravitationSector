@@ -5,24 +5,29 @@ import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.protection.managers.RegionManager;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import com.sk89q.worldguard.protection.regions.RegionContainer;
-import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 public final class GravitationSector extends JavaPlugin implements Listener {
 
     private static GravitationSector instance;
+    private RegionContainer container;
 
-    public RegionContainer container;
+    private final Set<UUID> playersInSafeZone = new HashSet<>();
+    private final Set<UUID> playersInSpace = new HashSet<>();
+    private final Map<UUID, Long> airCooldown = new HashMap<>();
+
+    private ProtectedRegion safezone;
 
     @Override
     public void onEnable() {
@@ -36,99 +41,100 @@ public final class GravitationSector extends JavaPlugin implements Listener {
         return instance;
     }
 
-    public Set<UUID> getPlayersInSpace() {
-        Set<UUID> uuidSet = new HashSet<>();
-        for (String uuidString : playersInSpace) {
-            uuidSet.add(UUID.fromString(uuidString));
-        }
-        return uuidSet;
+    private boolean hasSpaceHelmet(Player player) {
+        if (player.getInventory().getHelmet() == null) return false;
+        if (!player.getInventory().getHelmet().hasItemMeta()) return false;
+
+        ItemMeta meta = player.getInventory().getHelmet().getItemMeta();
+        NamespacedKey key = new NamespacedKey(this, "space_helmet");
+
+        return meta.getPersistentDataContainer().has(key, PersistentDataType.INTEGER);
     }
 
-    public Set<UUID> getPlayersInSafeZone() {
-        Set<UUID> uuidSet = new HashSet<>();
-        for (String uuidString : playersInSafeZone) {
-            uuidSet.add(UUID.fromString(uuidString));
-        }
-        return uuidSet;
-    }
-
-    public boolean isInSpace(Player player) {
-        return playersInSpace.contains(player.getUniqueId().toString());
-    }
-
-    public boolean isInSafeZone(Player player) {
-        return playersInSafeZone.contains(player.getUniqueId().toString());
-    }
-
-    @Override
-    public void onDisable() {
-    }
-
-    public static List<String> playersInSafeZone = new ArrayList<>(); //UUID Gracza
-    public static List<String> playersInSpace = new ArrayList<>(); //UUID Gracza
-    public ProtectedRegion safezone;
-    public ProtectedRegion space;
-
-    public void PlayerZone(Player player) {
+    private void updatePlayerZone(Player player) {
         RegionManager regions = container.get(BukkitAdapter.adapt(player.getWorld()));
-        if (regions != null) {
-            safezone = regions.getRegion("safe-zone");
-            space = regions.getRegion("zone");
+        if (regions == null) return;
 
-            int x = player.getLocation().getBlockX();
-            int y = player.getLocation().getBlockY();
-            int z = player.getLocation().getBlockZ();
-            String uuid = player.getUniqueId().toString();
+        safezone = regions.getRegion("safe-zone");
+        if (safezone == null) return;
 
-            if (safezone.contains(x,y,z)) {
-                playersInSafeZone.add(uuid);
-            } else if (space.contains(x,y,z)) {
-                playersInSpace.add(uuid);
-            }
-            else {
-                if (playersInSpace.contains(uuid)) {
-                    playersInSpace.remove(uuid);
-                } else if (playersInSafeZone.contains(uuid)) {
-                    playersInSafeZone.remove(uuid);
-                }
-            }
+        int x = player.getLocation().getBlockX();
+        int y = player.getLocation().getBlockY();
+        int z = player.getLocation().getBlockZ();
+
+        UUID uuid = player.getUniqueId();
+
+        if (safezone.contains(x, y, z)) {
+            playersInSafeZone.add(uuid);
+            playersInSpace.remove(uuid);
+        } else {
+            // wszystko poza safe = space
+            playersInSpace.add(uuid);
+            playersInSafeZone.remove(uuid);
         }
     }
 
-    public void addEffect(Player player, boolean isSafe) {
-        //TODO space_helmet
+    private void applyEffects(Player player, boolean isSafe) {
+        UUID uuid = player.getUniqueId();
+
         if (isSafe) {
-            player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 1, 2));
+            player.addPotionEffect(new PotionEffect(
+                    PotionEffectType.REGENERATION, 20, 1, true, false
+            ));
             player.setRemainingAir(player.getMaximumAir());
-        } else if (!isSafe) {
-            player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 1, 2));
-            player.addPotionEffect(new PotionEffect(PotionEffectType.JUMP, 1, 3));
-            if (!player.getInventory().getHelmet().getItemMeta().getPersistentDataContainer().getKeys().contains(SpaceHelmet.createHelmet().getItemMeta().getPersistentDataContainer().getKeys())) {
-                new BukkitRunnable() {
-                    public void run() {
-                        if (playersInSafeZone.contains(player.getUniqueId().toString())) {
-                            cancel();
-                            return;
-                        }
-                        int air = player.getRemainingAir();
-                        player.setRemainingAir(air - 30);
-                    }
-                }.runTaskTimer(this, 0, 20L);
-            } else {
-                player.setRemainingAir(player.getMaximumAir());
-                player.addPotionEffect(new PotionEffect(PotionEffectType.WATER_BREATHING, 2, 2));
-            }
+            airCooldown.remove(uuid);
+            return;
         }
+
+        // SPACE
+        player.addPotionEffect(new PotionEffect(
+                PotionEffectType.SLOW_FALLING, 20, 1, true, false
+        ));
+        player.addPotionEffect(new PotionEffect(
+                PotionEffectType.JUMP, 20, 2, true, false
+        ));
+
+        if (!hasSpaceHelmet(player)) {
+            int maxAir = player.getMaximumAir();
+            int air = player.getRemainingAir();
+
+            if (air >= maxAir) {
+                player.setRemainingAir(maxAir - 1);
+            }
+
+            long now = System.currentTimeMillis();
+            long last = airCooldown.getOrDefault(uuid, 0L);
+
+            if (now - last >= 1000) {
+                player.setRemainingAir(Math.max(0, air - 30));
+                airCooldown.put(uuid, now);
+            }
+            return;
+        }
+
+        player.setRemainingAir(player.getMaximumAir());
+        player.addPotionEffect(new PotionEffect(
+                PotionEffectType.WATER_BREATHING, 40, 0, true, false
+        ));
     }
+
     @EventHandler
-    public void playerMoveEvent(PlayerMoveEvent playerMoveEvent) {
-        Player p = playerMoveEvent.getPlayer();
-        String uuid = p.getUniqueId().toString();
-        PlayerZone(p);
+    public void onPlayerMove(PlayerMoveEvent event) {
+        if (event.getFrom().getBlockX() == event.getTo().getBlockX() &&
+                event.getFrom().getBlockY() == event.getTo().getBlockY() &&
+                event.getFrom().getBlockZ() == event.getTo().getBlockZ()) {
+            return;
+        }
+
+        Player player = event.getPlayer();
+        UUID uuid = player.getUniqueId();
+
+        updatePlayerZone(player);
+
         if (playersInSafeZone.contains(uuid)) {
-            addEffect(p, true);
-        } else if (playersInSpace.contains(uuid)) {
-            addEffect(p, false);
+            applyEffects(player, true);
+        } else {
+            applyEffects(player, false);
         }
     }
 }
